@@ -19,6 +19,12 @@ const API = 'https://graph.instagram.com/v21.0';
 const get = async (p, q = {}) => (await fetch(`${API}${p}?${new URLSearchParams({ ...q, access_token: TOKEN })}`)).json();
 const post = async (p, q = {}) => (await fetch(`${API}${p}?${new URLSearchParams({ ...q, access_token: TOKEN })}`, { method: 'POST' })).json();
 
+// Prove the token works on every run, so a stale secret fails loudly here
+// instead of silently at the next slot.
+const me = await get('/me', { fields: 'username' });
+if (me.error) { console.error(`token rejected: ${me.error.message}`); process.exit(1); }
+console.log(`token ok: @${me.username}`);
+
 const { posts = [] } = JSON.parse(readFileSync('schedule.json', 'utf8'));
 const now = Date.now();
 const due = posts
