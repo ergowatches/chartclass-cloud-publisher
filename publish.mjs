@@ -36,6 +36,21 @@ if (Date.now() - lastAt < GAP_MIN * 60e3) {
   process.exit(0);
 }
 
+// Breakout hold, mirrored from src/breakout.mjs in the main repo: while any reel
+// from the last 18h has 3,000+ views at 250+/hour, the next one waits.
+const recent6 = await get(`/${USER}/media`, { fields: 'id,timestamp', limit: '6' });
+for (const x of recent6.data || []) {
+  const ageH = (Date.now() - Date.parse(x.timestamp)) / 3600e3;
+  if (ageH > 18) continue;
+  const ins = await get(`/${x.id}/insights`, { metric: 'views' });
+  const views = ins.data?.[0]?.values?.[0]?.value ?? 0;
+  const rate = views / Math.max(ageH, 0.25);
+  if (views >= 3000 && rate >= 250) {
+    console.log(`breakout hold: reel ${x.id} has ${views} views at ${Math.round(rate)}/h (${ageH.toFixed(1)}h old); not posting`);
+    process.exit(0);
+  }
+}
+
 const { posts = [] } = JSON.parse(readFileSync('schedule.json', 'utf8'));
 const now = Date.now();
 const due = posts
