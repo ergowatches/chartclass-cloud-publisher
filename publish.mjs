@@ -25,10 +25,22 @@ const me = await get('/me', { fields: 'username' });
 if (me.error) { console.error(`token rejected: ${me.error.message}`); process.exit(1); }
 console.log(`token ok: @${me.username}`);
 
+// Never post on top of the last reel. On 28 Sept GitHub's scheduler fired four
+// hours late and then twice in five minutes, putting two reels out back to back
+// while a third was breaking out. Ask the account what actually went live last.
+const GAP_MIN = 55;
+const recent = await get(`/${USER}/media`, { fields: 'timestamp', limit: '1' });
+const lastAt = recent.data?.[0]?.timestamp ? Date.parse(recent.data[0].timestamp) : 0;
+if (Date.now() - lastAt < GAP_MIN * 60e3) {
+  console.log(`last reel went live ${Math.round((Date.now() - lastAt) / 60e3)} min ago, holding (gap ${GAP_MIN} min)`);
+  process.exit(0);
+}
+
 const { posts = [] } = JSON.parse(readFileSync('schedule.json', 'utf8'));
 const now = Date.now();
 const due = posts
-  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 8 * 3600e3)
+  // late by more than 90 min means the slot is gone; the laptop reschedules it
+  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 90 * 60e3)
   .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
 for (const p of due) {
