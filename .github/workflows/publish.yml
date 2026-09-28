@@ -1,0 +1,19 @@
+name: publish
+on:
+  schedule:
+    # every 15 min, 06:00-21:59 UTC (07:00-22:59 London in summer time).
+    # Kept to posting hours so a private repo stays inside the free Actions minutes.
+    - cron: "*/15 6-21 * * *"
+  workflow_dispatch: {}
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node publish.mjs
+        env:
+          IG_TOKEN: ${{ secrets.IG_TOKEN }}
+          IG_USER_ID: ${{ secrets.IG_USER_ID }}
