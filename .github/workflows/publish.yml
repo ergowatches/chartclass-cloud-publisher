@@ -1,32 +1,61 @@
 name: publish
 on:
   schedule:
-    # every 15 min, 06:00-21:59 UTC (07:00-22:59 London in summer time).
-    # GitHub's scheduler is best effort: on 28-29 Sept it ran hours late or not
-    # at all, so important posts use the wait_until dispatch below instead.
+    # Best effort only: on 28-29 Sept GitHub ran this hours late or not at all.
     - cron: "*/15 6-21 * * *"
   workflow_dispatch:
     inputs:
       wait_until:
-        description: "ISO time to sleep until before publishing (max ~5h50m ahead)"
+        description: "ISO time to publish at. Waits longer than ~5h40m are relayed to a fresh run."
         required: false
         default: ""
+      chain:
+        description: "After publishing, start a waiter for the next scheduled post if it is within 6h"
+        required: false
+        default: "false"
+permissions:
+  contents: read
+  actions: write
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 355
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WAIT_UNTIL: ${{ inputs.wait_until }}
+      CHAIN: ${{ inputs.chain }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      - name: wait for the slot
+      - name: wait for the slot (or relay a long wait to a fresh run)
+        id: wait
         if: ${{ inputs.wait_until != '' }}
         run: |
-          target=$(date -d "${{ inputs.wait_until }}" +%s); now=$(date +%s)
-          secs=$(( target - now )); echo "sleeping ${secs}s until ${{ inputs.wait_until }}"
+          target=$(date -d "$WAIT_UNTIL" +%s); now=$(date +%s); secs=$(( target - now ))
+          max=$(( 340 * 60 ))
+          if [ "$secs" -gt "$max" ]; then
+            echo "slot is ${secs}s away; sleeping ${max}s then handing over to a fresh run"
+            sleep "$max"
+            gh workflow run publish -R "$GITHUB_REPOSITORY" -f wait_until="$WAIT_UNTIL" -f chain="$CHAIN"
+            echo "relayed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "sleeping ${secs}s until $WAIT_UNTIL"
           if [ "$secs" -gt 0 ]; then sleep "$secs"; fi
-          git pull -q   # pick up any schedule change made while waiting
-      - run: node publish.mjs
+          git pull -q
+      - name: publish
+        if: ${{ steps.wait.outputs.relayed != 'true' }}
+        run: node publish.mjs
         env:
           IG_TOKEN: ${{ secrets.IG_TOKEN }}
           IG_USER_ID: ${{ secrets.IG_USER_ID }}
+      - name: chain to the next post
+        if: ${{ inputs.chain == 'true' && steps.wait.outputs.relayed != 'true' }}
+        run: |
+          git pull -q
+          next=$(node -e '
+            const s=require("./schedule.json").posts.map(p=>Date.parse(p.at)).filter(t=>t>Date.now()+60e3).sort((a,b)=>a-b)[0];
+            if(s && s-Date.now()<6*3600e3) console.log(new Date(s+30e3).toISOString());')
+          if [ -n "$next" ]; then echo "next post at $next, starting its waiter"; gh workflow run publish -R "$GITHUB_REPOSITORY" -f wait_until="$next" -f chain=true;
+          else echo "no post within 6h; chain stops (laptop or cron restarts it)"; fi
