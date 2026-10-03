@@ -51,11 +51,19 @@ for (const x of recent6.data || []) {
   }
 }
 
+// posting hours, London: never put a reel out at 1am because a run fired late
+const londonHour = +new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', hour: '2-digit', hour12: false }).format(new Date());
+if (londonHour < 10 || londonHour >= 21) { console.log(`outside posting hours (London ${londonHour}:00), holding`); process.exit(0); }
+
 const { posts = [] } = JSON.parse(readFileSync('schedule.json', 'utf8'));
 const now = Date.now();
 const due = posts
-  // late by more than 90 min means the slot is gone; the laptop reschedules it
-  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 90 * 60e3)
+  // Late is better than never. Until 3 Oct this dropped anything 90+ min late,
+  // and GitHub's scheduler only fired every 4-6 hours, so every slot the laptop
+  // slept through was silently lost (six reels in four days). Now a late post
+  // still goes out, as long as its upload has not expired (checked below via
+  // status_code) and it is posting hours in London.
+  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 23 * 3600e3)
   .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
 for (const p of due) {
