@@ -66,7 +66,7 @@ const isLive = (p) => {
 const { posts = [] } = JSON.parse(readFileSync('schedule.json', 'utf8'));
 const now = Date.now();
 const due = posts
-  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 36 * 3600e3)
+  .filter((p) => Date.parse(p.at) <= now && now - Date.parse(p.at) < 14 * 24 * 3600e3)
   .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 
 for (const p of due) {
