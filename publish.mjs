@@ -27,8 +27,8 @@ const get = async (p, o = {}) => (await fetch(`${API}${p}?${q(o)}`)).json();
 const post = async (p, o = {}) => (await fetch(`${API}${p}?${q(o)}`, { method: 'POST' })).json();
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-const GAP_MIN = 55;
-const OPEN = 9 * 60 - 10, CLOSE = 21 * 60 + 15;           // 08:50 - 21:15 London
+const GAP_MIN = 38;                                     // 20 a day from 9 Oct (was 55)
+const OPEN = 7 * 60 + 20, CLOSE = 22 * 60 + 35;           // 07:20 - 22:35 London (audience: Europe, US, India)
 
 const me = await get('/me', { fields: 'username' });
 if (me.error) { console.error(`token rejected: ${me.error.message}`); process.exit(1); }
